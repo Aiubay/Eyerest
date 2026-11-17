@@ -1,0 +1,380 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>EyeRule for Windows 11: UI mock</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: #111; color: #ddd; font-family: "Segoe UI Variable", "Segoe UI", -apple-system, system-ui, sans-serif; }
+  a { color: inherit; text-decoration: none; }
+
+  /* mock page chrome */
+  #nav { display: flex; flex-wrap: wrap; gap: 6px; padding: 10px 14px; background: #1b1b1b; border-bottom: 1px solid #333; font-size: 12px; align-items: center; }
+  #nav b { color: #888; margin: 0 4px 0 10px; font-weight: 600; }
+  #nav a { padding: 4px 9px; border-radius: 4px; background: #2a2a2a; }
+  #nav a.on { background: #0f6cbd; color: #fff; }
+  #caption { padding: 10px 16px; font-size: 13px; color: #aaa; max-width: 1280px; }
+  #wrap { padding: 0 14px 20px; }
+
+  /* the fake 1280x720 screen */
+  #screen { position: relative; width: 1280px; height: 720px; overflow: hidden; border-radius: 6px; border: 1px solid #333; }
+  .wallpaper { position: absolute; inset: 0; background:
+     radial-gradient(900px 600px at 30% 40%, #1d6fd8 0%, transparent 60%),
+     radial-gradient(700px 500px at 75% 70%, #7a3ff2 0%, transparent 60%),
+     linear-gradient(135deg, #0a1b3d, #12062e); }
+  .game { position: absolute; inset: 0; background:
+     radial-gradient(600px 300px at 50% 85%, #2a3a2a 0%, transparent 70%),
+     linear-gradient(#3a4a5a 0%, #4a5a4a 55%, #2b2b24 100%); }
+  .game .crosshair { position: absolute; left: 50%; top: 52%; width: 22px; height: 22px; transform: translate(-50%,-50%);
+     background: linear-gradient(#6f6,#6f6) center/2px 100% no-repeat, linear-gradient(#6f6,#6f6) center/100% 2px no-repeat; opacity: .8; }
+  .game .hud-hp { position: absolute; left: 30px; bottom: 30px; width: 200px; height: 14px; background: #0006; border: 1px solid #fff5; }
+  .game .hud-hp i { display: block; width: 72%; height: 100%; background: #e8e8e8; }
+  .game .hud-map { position: absolute; right: 24px; top: 70px; width: 150px; height: 150px; background: #0005; border: 1px solid #fff4; }
+  .game .hud-fps { position: absolute; left: 14px; bottom: 6px; font: 11px monospace; color: #fff9; }
+  .game .tag { position: absolute; left: 50%; bottom: 90px; transform: translateX(-50%); font-size: 12px; color: #fff8; background: #0005; padding: 3px 10px; border-radius: 10px; }
+
+  /* taskbar */
+  .taskbar { position: absolute; left: 0; right: 0; bottom: 0; height: 48px; background: rgba(32,32,32,.82); backdrop-filter: blur(20px); border-top: 1px solid #ffffff14; display: flex; align-items: center; justify-content: center; gap: 10px; }
+  .taskbar .ic { width: 26px; height: 26px; border-radius: 6px; background: #ffffff22; }
+  .taskbar .ic.s { background: #4cc2ff; border-radius: 4px; }
+  .tray { position: absolute; right: 12px; top: 0; bottom: 0; display: flex; align-items: center; gap: 12px; color: #fff; font-size: 12px; }
+  .tray .t-eye { width: 18px; height: 18px; display: grid; place-items: center; border-radius: 4px; }
+  .tray .t-eye.hl { background: #ffffff25; }
+  .tray svg { width: 16px; height: 16px; }
+  .clock { text-align: right; line-height: 1.2; font-size: 11px; }
+
+  /* ---------- the pill (black, same on all themes) ---------- */
+  .pill { position: absolute; top: 0; left: 50%; transform: translateX(-50%); background: #000; color: #fff;
+    border-radius: 0 0 var(--r,17px) var(--r,17px); border: 1.5px solid color-mix(in srgb, var(--accent) 55%, transparent); border-top: none;
+    font-family: "Segoe UI Variable", "Segoe UI", system-ui, sans-serif; overflow: hidden; box-shadow: 0 6px 22px #0008; }
+  .pill.pulse { animation: pulse 1s ease-in-out infinite alternate; }
+  @keyframes pulse { from { border-color: color-mix(in srgb, var(--accent) 95%, transparent); } to { border-color: color-mix(in srgb, var(--accent) 25%, transparent); } }
+  .pill.compact { height: 34px; display: flex; align-items: center; justify-content: space-between; padding: 0 20px; font-size: 13px; font-weight: 600; }
+  .pill .eye { color: var(--accent); display: flex; }
+  .pill .eye svg { width: 17px; height: 17px; }
+  .pill .line { position: absolute; left: 14px; right: 14px; bottom: 4px; height: 3px; border-radius: 2px; background: #ffffff1f; }
+  .pill .line i { display: block; height: 100%; border-radius: 2px; background: var(--accent); }
+  .ring { position: relative; flex: none; display: grid; place-items: center; }
+  .ring svg { position: absolute; inset: 0; transform: rotate(-90deg); }
+  .ring b { position: relative; font-weight: 600; }
+  .breathe { animation: breathe 2.4s ease-in-out infinite alternate; }
+  @keyframes breathe { from { transform: scale(.94); } to { transform: scale(1.06); } }
+  .pill.card { padding: 12px 24px 16px; }
+  .pill .row { display: flex; align-items: center; gap: 14px; }
+  .pill h4 { font-size: 15px; display: flex; align-items: center; gap: 7px; font-weight: 600; }
+  .pill h4 svg { width: 15px; height: 15px; color: #4ade80; }
+  .pill p { font-size: 13px; color: #ffffffa6; margin-top: 3px; }
+  .pill .btns { display: flex; gap: 8px; margin-top: 12px; }
+  .pbtn { font-size: 12px; font-weight: 600; padding: 6px 11px; border-radius: 99px; background: #ffffff26; color: #fff; }
+  .pbtn.pri { background: #fff; color: #000; }
+  .pbtn .auto { font-weight: 500; opacity: .7; }
+  .kc { display: inline-block; font-size: 11px; padding: 1px 6px; border: 1px solid #ffffff44; border-bottom-width: 2px; border-radius: 4px; color: #fffd; margin: 0 1px; }
+
+  .toast { position: absolute; right: 16px; bottom: 60px; width: 360px; background: rgba(44,44,44,.97); border: 1px solid #ffffff1a; border-radius: 8px; padding: 14px 16px; color: #fff; font-size: 13px; box-shadow: 0 8px 28px #0009; }
+  .toast .th { display: flex; align-items: center; gap: 8px; font-size: 12px; color: #ffffffb0; margin-bottom: 8px; }
+  .toast .th svg { width: 14px; height: 14px; }
+  .toast b { display: block; margin-bottom: 3px; font-size: 14px; }
+  .toast.dashed { border-style: dashed; }
+
+  /* ---------- Fluent window (settings) ---------- */
+  .theme-dark { --bg: #202020; --bg2: #272727; --card: rgba(255,255,255,.0512); --card-hover: rgba(255,255,255,.0837); --stroke: rgba(255,255,255,.0698);
+    --text: #fff; --text2: rgba(255,255,255,.786); --text3: rgba(255,255,255,.545); --accent: #60cdff; --on-accent: #000; --ctrl: rgba(255,255,255,.0605);
+    --ctrl-stroke: rgba(255,255,255,.0698); --nav-sel: rgba(255,255,255,.0605); --ctrl-bd: rgba(255,255,255,.545); --win-shadow: 0 16px 48px #000a; }
+  .theme-light { --bg: #f3f3f3; --bg2: #eee; --card: rgba(255,255,255,.7); --card-hover: rgba(249,249,249,.5); --stroke: rgba(0,0,0,.058);
+    --text: #1a1a1a; --text2: rgba(0,0,0,.62); --text3: rgba(0,0,0,.45); --accent: #0067c0; --on-accent: #fff; --ctrl: rgba(255,255,255,.7);
+    --ctrl-stroke: rgba(0,0,0,.058); --nav-sel: rgba(0,0,0,.0373); --ctrl-bd: rgba(0,0,0,.61); --win-shadow: 0 16px 48px #0006; }
+  .win { position: absolute; left: 100px; top: 28px; width: 1080px; height: 640px; background: var(--bg); color: var(--text);
+    border-radius: 8px; border: 1px solid #ffffff22; box-shadow: var(--win-shadow); display: flex; flex-direction: column; overflow: hidden; font-size: 14px; }
+  .theme-dark .win { background: linear-gradient(160deg, #2a2d33 0%, #202020 55%); }
+  .theme-light .win { background: linear-gradient(160deg, #eef3fb 0%, #f3f3f3 55%); }
+  .titlebar { height: 36px; display: flex; align-items: center; padding-left: 12px; font-size: 12px; flex: none; }
+  .titlebar .ti { width: 16px; height: 16px; margin-right: 10px; color: var(--accent); }
+  .titlebar .wc { margin-left: auto; display: flex; height: 100%; }
+  .titlebar .wc span { width: 46px; display: grid; place-items: center; font-size: 11px; color: var(--text2); }
+  .titlebar .wc span:last-child:hover { background: #c42b1c; color: #fff; }
+  .body { flex: 1; display: flex; min-height: 0; }
+  .navp { width: 270px; padding: 4px 8px 8px; display: flex; flex-direction: column; gap: 2px; flex: none; }
+  .navp .search { margin: 0 4px 10px; height: 32px; border-radius: 4px; background: var(--ctrl); border: 1px solid var(--ctrl-stroke); border-bottom-color: var(--ctrl-bd); font-size: 13px; color: var(--text3); display: flex; align-items: center; padding: 0 10px; }
+  .navi { position: relative; height: 38px; border-radius: 4px; display: flex; align-items: center; gap: 12px; padding: 0 12px; font-size: 14px; color: var(--text); }
+  .navi svg { width: 17px; height: 17px; flex: none; }
+  .navi:hover { background: var(--nav-sel); }
+  .navi.sel { background: var(--nav-sel); }
+  .navi.sel::before { content: ""; position: absolute; left: 0; top: 10px; bottom: 10px; width: 3px; border-radius: 2px; background: var(--accent); }
+  .navp .sp { flex: 1; }
+  .content { flex: 1; padding: 6px 36px 24px 28px; overflow: hidden; }
+  .content h1 { font-size: 28px; font-weight: 600; margin: 6px 0 18px; letter-spacing: -.2px; }
+  .stack { display: flex; flex-direction: column; gap: 3px; }
+  .stack h3 { font-size: 14px; font-weight: 600; margin: 14px 0 6px; }
+  .scard { min-height: 62px; background: var(--card); border: 1px solid var(--stroke); border-radius: 4px; display: flex; align-items: center; padding: 12px 16px; gap: 16px; }
+  .scard > svg { width: 20px; height: 20px; flex: none; color: var(--text); }
+  .scard .t { flex: 1; min-width: 0; }
+  .scard .t b { display: block; font-weight: 400; font-size: 14px; }
+  .scard .t small { display: block; font-size: 12px; color: var(--text2); margin-top: 2px; }
+  .scard .ctl { display: flex; align-items: center; gap: 10px; font-size: 13px; color: var(--text2); }
+  .hero { padding: 20px; gap: 24px; }
+  .hero .ring b { font-size: 26px; }
+  .hero .st { flex: 1; }
+  .hero .st small { font-size: 11px; letter-spacing: 1px; color: var(--text3); font-weight: 600; }
+  .hero .st div { font-size: 18px; font-weight: 600; margin: 3px 0 2px; }
+  .hero .st span { font-size: 13px; color: var(--text2); }
+  .btn { height: 32px; padding: 0 16px; border-radius: 4px; display: inline-flex; align-items: center; background: var(--ctrl); border: 1px solid var(--ctrl-stroke); border-bottom-color: var(--ctrl-bd); font-size: 14px; color: var(--text); }
+  .btn.acc { background: var(--accent); color: var(--on-accent); border-color: transparent; }
+  .btns { display: flex; gap: 8px; margin-top: 12px; }
+  .num { display: inline-flex; align-items: center; height: 32px; min-width: 120px; background: var(--ctrl); border: 1px solid var(--ctrl-stroke); border-bottom: 2px solid var(--ctrl-bd); border-radius: 4px; padding: 0 0 0 10px; color: var(--text); font-size: 14px; justify-content: space-between; }
+  .num i { font-style: normal; width: 26px; text-align: center; color: var(--text2); font-size: 10px; }
+  .num .sp2 { display: flex; }
+  .dd { display: inline-flex; align-items: center; justify-content: space-between; height: 32px; min-width: 160px; padding: 0 10px; background: var(--ctrl); border: 1px solid var(--ctrl-stroke); border-bottom-color: var(--ctrl-bd); border-radius: 4px; color: var(--text); font-size: 14px; }
+  .dd svg { width: 12px; height: 12px; margin-left: 12px; color: var(--text2); }
+  .sw { display: inline-flex; align-items: center; gap: 12px; font-size: 13px; color: var(--text); }
+  .sw u { text-decoration: none; position: relative; width: 40px; height: 20px; border-radius: 10px; border: 1px solid var(--ctrl-bd); display: block; }
+  .sw u::after { content: ""; position: absolute; left: 4px; top: 4px; width: 10px; height: 10px; border-radius: 50%; background: var(--ctrl-bd); }
+  .sw.on u { background: var(--accent); border-color: var(--accent); }
+  .sw.on u::after { left: 24px; background: var(--on-accent); width: 12px; height: 12px; top: 3px; }
+  .slider { width: 160px; height: 4px; border-radius: 2px; background: var(--ctrl-bd); opacity: .6; position: relative; }
+  .slider i { position: absolute; left: 0; top: 0; bottom: 0; width: 70%; background: var(--accent); border-radius: 2px; opacity: 1; }
+  .slider::after { content: ""; position: absolute; left: calc(70% - 10px); top: -8px; width: 20px; height: 20px; border-radius: 50%; background: var(--ctrl-bd); box-shadow: inset 0 0 0 5px var(--bg2); }
+  .info { display: flex; gap: 12px; align-items: flex-start; padding: 12px 16px; border-radius: 4px; border: 1px solid var(--stroke); background: var(--card); font-size: 13px; margin-bottom: 6px; }
+  .info.ok { background: rgba(108,203,95,.12); } .info.warn { background: rgba(252,225,0,.1); } .info.blue { background: rgba(96,205,255,.1); }
+  .info svg { width: 18px; height: 18px; flex: none; }
+  .info b { display: block; font-weight: 600; margin-bottom: 2px; }
+  .kcs { display: flex; gap: 4px; }
+  .kcap { min-width: 30px; height: 30px; padding: 0 9px; display: inline-grid; place-items: center; background: var(--ctrl); border: 1px solid var(--ctrl-stroke); border-bottom-width: 2px; border-radius: 4px; font-size: 13px; color: var(--text); }
+  .iconbtn { width: 32px; height: 32px; display: grid; place-items: center; border-radius: 4px; color: var(--text); }
+  .iconbtn:hover { background: var(--nav-sel); }
+  .iconbtn svg { width: 16px; height: 16px; }
+  .chips { display: flex; flex-wrap: wrap; gap: 6px; }
+  .chip { font-size: 12px; padding: 4px 10px; border-radius: 99px; background: var(--ctrl); border: 1px solid var(--ctrl-stroke); font-family: Consolas, monospace; }
+  .bars { display: flex; align-items: flex-end; gap: 14px; height: 90px; }
+  .bars div { width: 28px; display: flex; flex-direction: column; align-items: center; justify-content: flex-end; gap: 4px; height: 100%; font-size: 11px; color: var(--text3); }
+  .bars i { display: block; width: 100%; border-radius: 3px 3px 0 0; background: var(--text3); opacity: .45; }
+  .bars div.today i { background: var(--accent); opacity: 1; }
+  .pbar { width: 220px; height: 6px; border-radius: 3px; background: var(--ctrl-bd); opacity: .35; position: relative; }
+  .pbar i { position: absolute; inset: 0 auto 0 0; background: var(--accent); border-radius: 3px; opacity: 1; }
+  .dialog-bg { position: absolute; inset: 36px 0 0 0; background: rgba(0,0,0,.45); display: grid; place-items: center; z-index: 5; }
+  .dialog { width: 460px; background: var(--bg2); border: 1px solid var(--stroke); border-radius: 8px; box-shadow: 0 12px 40px #000a; }
+  .theme-dark .dialog { background: #2b2b2b; }
+  .dialog .dh { padding: 22px 24px 8px; font-size: 20px; font-weight: 600; }
+  .dialog .db { padding: 6px 24px 20px; font-size: 14px; color: var(--text2); }
+  .dialog .keybox { margin: 18px 0 4px; height: 76px; display: grid; place-items: center; background: var(--ctrl); border: 1px solid var(--ctrl-stroke); border-radius: 4px; }
+  .dialog .df { padding: 16px 24px; display: flex; gap: 8px; background: rgba(0,0,0,.12); border-top: 1px solid var(--stroke); }
+  .dialog .df .btn { flex: 1; justify-content: center; }
+
+  /* tray flyout */
+  .flyout { position: absolute; right: 14px; bottom: 58px; width: 340px; background: rgba(40,40,40,.92); backdrop-filter: blur(30px); border: 1px solid #ffffff1c; border-radius: 8px; box-shadow: 0 10px 36px #000a; color: #fff; padding: 16px; font-size: 14px; }
+  .flyout.light { background: rgba(243,243,243,.92); color: #1a1a1a; border-color: #0001; }
+  .flyout .fh { display: flex; gap: 16px; align-items: center; }
+  .flyout .fh b { font-size: 16px; display: block; }
+  .flyout .fh span { font-size: 12px; opacity: .7; }
+  .flyout .fb { display: flex; gap: 8px; margin-top: 14px; }
+  .flyout .fb .btn { flex: 1; justify-content: center; background: rgba(255,255,255,.09); color: inherit; }
+  .flyout.light .fb .btn { background: #fff; }
+  .flyout .fb .btn.acc { background: #60cdff; color: #000; }
+  .flyout .ff { margin-top: 12px; padding-top: 10px; border-top: 1px solid #ffffff1a; font-size: 13px; display: flex; justify-content: space-between; opacity: .9; }
+</style>
+</head>
+<body>
+<div id="nav"></div>
+<div id="caption"></div>
+<div id="wrap"><div id="screen"></div></div>
+
+<script>
+const q = new URLSearchParams(location.search);
+const scene = q.get('scene') || 'pill';
+const state = q.get('state') || 'compact';
+const page = q.get('page') || 'timer';
+const theme = q.get('theme') || 'dark';
+const dialog = q.get('dialog') === '1';
+if (q.get('nav') === '0') { document.getElementById('nav').style.display = 'none'; document.getElementById('caption').style.display = 'none'; }
+
+/* ---------- icons ---------- */
+const P = {
+  eye: '<path d="M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/>',
+  clock: '<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>',
+  bell: '<path d="M6 8a6 6 0 0112 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10 21a2 2 0 004 0"/>',
+  chart: '<path d="M4 20v-6M10 20V6M16 20v-9M22 20H2"/>',
+  camera: '<rect x="3" y="7" width="18" height="13" rx="2"/><circle cx="12" cy="13" r="3.5"/><path d="M8 7l1.5-3h5L16 7"/>',
+  key: '<rect x="2" y="6" width="20" height="12" rx="2"/><path d="M6 10h.01M10 10h.01M14 10h.01M18 10h.01M7 14h10"/>',
+  shield: '<path d="M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6z"/>',
+  power: '<path d="M12 3v9"/><path d="M6.3 7a8 8 0 1011.4 0"/>',
+  info: '<circle cx="12" cy="12" r="9"/><path d="M12 11v6M12 7h.01"/>',
+  pencil: '<path d="M4 20l4-1 11-11-3-3L5 16z"/>',
+  chev: '<path d="M6 9l6 6 6-6"/>',
+  volume: '<path d="M4 9v6h4l5 4V5L8 9z"/><path d="M16 9a4 4 0 010 6"/>',
+  check: '<path d="M5 12l5 5 9-10"/>',
+  moon: '<path d="M20 14A8 8 0 1110 4a6 6 0 0010 10z"/>',
+  hand: '<path d="M7 11V5a1.5 1.5 0 013 0v5M10 10V4a1.5 1.5 0 013 0v6M13 10V5a1.5 1.5 0 013 0v7M16 12V8a1.5 1.5 0 013 0v6c0 4-3 7-7 7-3 0-5-2-6-4l-2-4a1.5 1.5 0 012.5-1.5L7 14"/>',
+  pause: '<path d="M8 5v14M16 5v14"/>',
+  game: '<rect x="2" y="7" width="20" height="11" rx="5"/><path d="M7 10v5M4.5 12.5h5M16 11h.01M18 14h.01"/>',
+  wifi: '<path d="M2 9a15 15 0 0120 0M5 12.5a10 10 0 0114 0M8.5 16a5 5 0 017 0M12 19.5h.01"/>',
+};
+const ic = (n, extra='') => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" ${extra}>${P[n]}</svg>`;
+
+function ring(size, pct, color, text, tw) {
+  const r = 42, c = 2 * Math.PI * r;
+  return `<div class="ring" style="width:${size}px;height:${size}px"><svg viewBox="0 0 100 100"><circle cx="50" cy="50" r="${r}" fill="none" stroke="${color}" stroke-opacity=".2" stroke-width="8"/><circle cx="50" cy="50" r="${r}" fill="none" stroke="${color}" stroke-width="8" stroke-linecap="round" stroke-dasharray="${c}" stroke-dashoffset="${c * (1 - pct)}"/></svg><b style="font-size:${tw}px">${text}</b></div>`;
+}
+
+/* ---------- the pill and its states ---------- */
+function pill(s) {
+  if (s === 'compact') return `<div class="pill compact" style="--accent:#22d3ee;width:240px"><span class="eye">${ic('eye')}</span><span>19:31</span><div class="line"><i style="width:3%"></i></div></div>`;
+  if (s === 'urgent') return `<div class="pill compact pulse" style="--accent:#fb923c;width:240px"><span class="eye" style="opacity:.8">${ic('eye')}</span><span>Break in 45s</span><div class="line"><i style="width:96%"></i></div></div>`;
+  if (s === 'away') return `<div class="pill compact" style="--accent:#22d3ee;width:240px"><span class="eye" style="opacity:.8">${ic('moon')}</span><span style="opacity:.5">12:08</span><div class="line"><i style="width:40%"></i></div></div>`;
+  if (s === 'break') return `<div class="pill card pulse" style="--accent:#4ade80;width:360px;--r:30px;padding-top:12px">
+      <div class="row"><div class="breathe">${ring(62, .7, '#4ade80', '14', 20)}</div>
+      <div><h4><span class="breathe" style="display:flex">${ic('eye')}</span>Look 20 feet away</h4><p>Blink slowly 10 times.</p></div></div>
+      <div class="btns"><span class="pbtn pri">Blink 4/10 <span class="auto">· auto</span></span><span class="pbtn">Skip</span><span class="pbtn">5 more min</span></div></div>`;
+  if (s === 'done') return `<div class="pill card" style="--accent:#4ade80;width:360px;--r:30px"><div class="row">${ring(62, 1, '#4ade80', '✓', 22)}
+      <div><h4>${ic('eye')}Nice, eyes rested.</h4><p>7 of 15 today · 3-day streak</p></div></div></div>`;
+  if (s === 'game') return `<div class="pill card pulse" style="--accent:#4ade80;width:330px;--r:22px;padding:12px 20px 14px">
+      <div class="row" style="gap:12px">${ring(44, .5, '#4ade80', '10', 14)}<div><h4 style="font-size:14px">Look away</h4><p style="font-size:12px;margin-top:1px">Blink slowly 10 times · blinks 4/10</p></div></div>
+      <p style="font-size:11px;margin-top:9px"><span class="kc">Ctrl</span><span class="kc">Alt</span><span class="kc">S</span> skip &nbsp; <span class="kc">Ctrl</span><span class="kc">Alt</span><span class="kc">M</span> +5 min</p></div>`;
+  return '';
+}
+
+/* ---------- screen builders ---------- */
+function taskbar(hl) {
+  return `<div class="taskbar"><div class="ic s"></div><div class="ic"></div><div class="ic"></div><div class="ic"></div><div class="ic"></div>
+    <div class="tray"><span>^</span><span class="t-eye ${hl ? 'hl' : ''}" style="color:#22d3ee">${ic('eye')}</span>${ic('wifi')}${ic('volume')}<div class="clock">21:43<br>14/05/2026</div></div></div>`;
+}
+const gameLayer = (label) => `<div class="game"><div class="hud-map"></div><div class="crosshair"></div><div class="hud-hp"><i></i></div><div class="hud-fps">144 FPS</div><div class="tag">${label}</div></div>`;
+
+function scenePill() {
+  if (state === 'safe') {
+    return gameLayer('fake game scene, Easy Anti-Cheat running') + `
+      <div class="toast dashed"><div class="th">${ic('eye')} EyeRule · now</div><b>Break time. Look away for 20 seconds.</b>
+      Overlay is off while Easy Anti-Cheat is running. A sound is playing. <br><span style="opacity:.6;font-size:12px">(Windows may hide this toast over a fullscreen game. The sound and tray icon still work.)</span></div>`;
+  }
+  if (state === 'hidden') {
+    return `<div class="wallpaper"></div>` + taskbar(false);
+  }
+  if (state === 'compact' || state === 'urgent' || state === 'away') {
+    return `<div class="wallpaper"></div>` + pill(state) + taskbar(false);
+  }
+  if (state === 'break' || state === 'done') {
+    return gameLayer('fake game scene, borderless windowed') + pill(state);
+  }
+  if (state === 'game') return gameLayer('fake game scene, borderless, anti-cheat not detected') + pill('game');
+  return '';
+}
+
+function navItem(id, icon, label, sel) {
+  return `<a class="navi ${sel ? 'sel' : ''}" href="?scene=settings&page=${id}&theme=${theme}">${ic(icon)}<span>${label}</span></a>`;
+}
+const sw = (on, label='') => `<span class="sw ${on ? 'on' : ''}"><u></u>${label || (on ? 'On' : 'Off')}</span>`;
+const num = (v, unit='') => `<span class="num">${v}${unit ? ' ' + unit : ''}<span class="sp2"><i>▲</i><i>▼</i></span></span>`;
+const dd = (v) => `<span class="dd">${v}${ic('chev')}</span>`;
+const card = (icon, t, d, ctl) => `<div class="scard">${icon ? ic(icon) : ''}<div class="t"><b>${t}</b>${d ? `<small>${d}</small>` : ''}</div><div class="ctl">${ctl || ''}</div></div>`;
+const kcs = (...k) => `<span class="kcs">${k.map(x => `<span class="kcap">${x}</span>`).join('')}</span>`;
+const hotRow = (t, d, k) => card('key', t, d, `${kcs(...k)}<span class="iconbtn">${ic('pencil')}</span>`);
+
+const pages = {
+  timer: () => `<h1>Timer</h1><div class="stack">
+    <div class="scard hero">${ring(104, .03, 'var(--accent)', '19:31', 24)}<div class="st"><small>WORKING</small><div>You've got 20 minutes. I'll nudge you.</div><span>No breaks yet today.</span>
+      <div class="btns"><span class="btn acc">Pause</span><span class="btn">Break now</span><span class="btn">Reset</span></div></div></div>
+    <h3>Cycle</h3>
+    ${card('clock', 'Work length', 'Time between breaks', num(20, 'min'))}
+    ${card('eye', 'Break length', 'How long you look away', num(20, 'sec'))}
+    ${card('chart', 'Daily goal', 'Breaks per day', num(15))}</div>`,
+  reminders: () => `<h1>Reminders</h1><div class="stack">
+    ${card('bell', 'Reminder style', 'How EyeRule tells you it is break time', dd('Pill and toast'))}
+    ${card('eye', 'Pill visibility', 'When the black pill is on screen. Breaks always show it, except in anti-cheat safe mode.', dd('Only in the last minute'))}
+    ${card('clock', 'Show the pill when this much time is left', 'Used by "Only in the last minute"', num(60, 'sec'))}
+    <div class="info blue">${ic('info')}<div><b>Other choices</b>Always show the pill, only in the last minute (and during breaks), or never (tray icon only). You can still open the tray flyout at any time.</div></div>
+    <h3>Sound</h3>
+    ${card('volume', 'Sound theme', 'Plays at the start and end of a break', `<span class="btn">Preview</span>${dd('Chime')}`)}
+    ${card('volume', 'Volume', '', `<span class="slider"><i></i></span>70`)}</div>`,
+  stats: () => `<h1>Stats</h1><div class="stack">
+    ${card('chart', '7 of 15 breaks today', 'Daily goal', `<span class="pbar"><i style="width:47%"></i></span>`)}
+    ${card('clock', '3-day streak', 'At least one break each day', '')}
+    <div class="scard" style="flex-direction:column;align-items:stretch;gap:14px;padding:18px 20px"><b style="font-weight:600">Last 7 days</b>
+      <div class="bars">${[['M',9],['T',12],['W',6],['T',14],['F',11],['S',4],['S',7]].map(([l,v],i)=>`<div class="${i===6?'today':''}"><i style="height:${v*5.5}px"></i>${l}</div>`).join('')}</div></div>
+    ${card('eye', 'Blinks per minute', 'Needs the camera tracker. Healthy range is about 15 to 20.', `<b style="font-size:18px;font-weight:600;color:var(--text)">14</b> avg this week`)}</div>`,
+  camera: () => `<h1>Camera</h1><div class="stack">
+    <div class="info blue">${ic('info')}<div><b>Optional and off by default</b>Analysis runs on this PC. No video is saved or sent. Only numbers like blinks per minute are kept. The camera light is on while it is active.</div></div>
+    ${card('camera', 'Enable camera eye tracker', 'Counts blinks and checks that you are at the screen', sw(true))}
+    <h3>Features</h3>
+    ${card('eye', 'Count blinks automatically', 'Replaces the Blink button during breaks', sw(true))}
+    ${card('bell', 'Blink-rate reminder', 'Show "Blink more" when blinks per minute fall below', `${num(10, '/min')}${sw(true, '')}`)}
+    ${card('moon', 'Face presence for smart pause', 'Pause the timer when no face is in front of the screen', sw(true))}
+    <h3>Status</h3>
+    ${card('camera', 'Camera: Integrated Webcam', 'Face found · 14 blinks per minute · sampling 5 fps in short bursts', `<span class="btn">Open Windows camera privacy</span>`)}</div>`,
+  hotkeys: () => `<h1>Hotkeys</h1><div class="stack">
+    <div class="info blue">${ic('info')}<div><b>For games where the mouse is captured</b>These work even when EyeRule is not in front. A shortcut needs at least one modifier key.</div></div>
+    ${hotRow('Skip break', 'Skip the current break', ['Ctrl','Alt','S'])}
+    ${hotRow('5 more minutes', 'Postpone the break', ['Ctrl','Alt','M'])}
+    ${hotRow('Count a blink', 'Blink counter +1 (when the camera is off)', ['Ctrl','Alt','B'])}
+    ${hotRow('Open settings', 'Show or hide this window', ['Ctrl','Alt','E'])}</div>`,
+  games: () => `<h1>Games and safety</h1><div class="stack">
+    <div class="info ok">${ic('check')}<div><b>Anti-cheat safe mode is on</b>When an anti-cheat is running, the overlay, hotkeys and camera turn off. You get a sound and a tray notification instead.</div></div>
+    ${card('shield', 'Anti-cheat safe mode', 'Recommended for CS2, Dead by Daylight and Black Desert', sw(true))}
+    ${card('game', 'Currently detected', 'Checked every few seconds', `<span class="chip">none</span>`)}
+    <h3>Never show the overlay for these games</h3>
+    <div class="scard" style="flex-direction:column;align-items:stretch;gap:10px"><div class="chips"><span class="chip">cs2.exe</span><span class="chip">DeadByDaylight-Win64-Shipping.exe</span><span class="chip">BlackDesert64.exe</span></div>
+      <small style="font-size:12px;color:var(--text2)">File names to confirm in Task Manager while each game runs. CS2 uses Valve's VAC, which has no separate process to detect.</small>
+      <div><span class="btn">Add game…</span></div></div>
+    <h3>Other</h3>
+    ${card('game', "Don't interrupt while I play", 'Delay the break while a fullscreen game is active', `${num(5, 'min max')}${sw(false)}`)}
+    ${card('bell', 'Exclusive fullscreen fallback', 'No overlay can show. Play a sound and flash the taskbar', sw(true))}</div>`,
+  startup: () => `<h1>Startup and behavior</h1><div class="stack">
+    ${card('power', 'Launch at login', 'Start EyeRule when you sign in to Windows', sw(true))}
+    ${card('eye', 'Start minimized to the tray', '', sw(true))}
+    <h3>Smart pause</h3>
+    ${card('moon', 'Pause when I am away', 'Hold the timer while the PC is idle or locked', sw(true))}
+    ${card('clock', 'Idle time before pausing', '', num(60, 'sec'))}
+    ${card('clock', 'Reset the timer after being away', 'Time away that counts as a rest', num(5, 'min'))}</div>`,
+  about: () => `<h1>About</h1><div class="stack">
+    ${card('eye', 'EyeRule', 'Version 0.1 (mock). 20-20-20 eye rest reminder.', '')}
+    ${card('info', 'Privacy', 'Everything stays on this PC. No account, no cloud.', '')}</div>`,
+};
+
+function sceneSettings() {
+  const items = [['timer','clock','Timer'],['reminders','bell','Reminders'],['stats','chart','Stats'],['camera','camera','Camera'],['hotkeys','key','Hotkeys'],['games','shield','Games and safety'],['startup','power','Startup and behavior']];
+  const nav = `<div class="navp"><div class="search">Search settings</div>${items.map(([id,i,l]) => navItem(id,i,l,id===page)).join('')}<div class="sp"></div>${navItem('about','info','About',page==='about')}</div>`;
+  const dlg = dialog ? `<div class="dialog-bg"><div class="dialog"><div class="dh">Press a shortcut</div><div class="db">Hold the modifier keys, then press a key.
+      <div class="keybox">${kcs('Ctrl','Alt','S')}</div><small style="color:var(--text3)">Ctrl + Alt + S is free.</small></div>
+      <div class="df"><span class="btn acc">Save</span><span class="btn">Cancel</span></div></div></div>` : '';
+  return `<div class="wallpaper"></div>
+    <div class="win"><div class="titlebar"><span class="ti">${ic('eye')}</span>EyeRule<div class="wc"><span>—</span><span>▢</span><span>✕</span></div></div>
+    <div class="body">${nav}<div class="content">${(pages[page] || pages.timer)()}</div></div>${dlg}</div>${taskbar(false)}`;
+}
+
+function sceneTray() {
+  const light = theme === 'light';
+  return `<div class="wallpaper"></div>${taskbar(true)}
+    <div class="flyout ${light ? 'light' : ''}"><div class="fh">${ring(64, .03, '#60cdff', '19:31', 17)}<div><b>Working</b><span>7 of 15 breaks today · 3-day streak</span></div></div>
+      <div class="fb"><span class="btn acc">Pause</span><span class="btn">Break now</span></div>
+      <div class="ff"><span>Open settings</span><span style="opacity:.6">Quit</span></div></div>`;
+}
+
+/* ---------- render ---------- */
+const stage = document.getElementById('screen');
+stage.className = 'theme-' + theme;
+stage.innerHTML = scene === 'settings' ? sceneSettings() : scene === 'tray' ? sceneTray() : scenePill();
+
+/* nav bar */
+const L = (href, label, on) => `<a class="${on ? 'on' : ''}" href="${href}">${label}</a>`;
+const states = [['hidden','Pill hidden'],['compact','Pill'],['urgent','Last minute'],['away','Away'],['break','Break card'],['done','Done'],['game','Game card'],['safe','Anti-cheat safe mode']];
+const pageList = [['timer','Timer'],['reminders','Reminders'],['stats','Stats'],['camera','Camera'],['hotkeys','Hotkeys'],['games','Games and safety'],['startup','Startup'],['about','About']];
+document.getElementById('nav').innerHTML =
+  `<b>Pill</b>` + states.map(([s,l]) => L(`?scene=pill&state=${s}`, l, scene==='pill' && state===s)).join('') +
+  `<b>Settings</b>` + pageList.map(([p,l]) => L(`?scene=settings&page=${p}&theme=${theme}`, l, scene==='settings' && page===p && !dialog)).join('') +
+  L(`?scene=settings&page=hotkeys&dialog=1&theme=${theme}`, 'Shortcut dialog', dialog) +
+  `<b>Tray</b>` + L(`?scene=tray&theme=${theme}`, 'Flyout', scene==='tray') +
+  `<b>Theme</b>` + L(`?${new URLSearchParams({...Object.fromEntries(q), theme:'dark'})}`, 'Dark', theme==='dark') + L(`?${new URLSearchParams({...Object.fromEntries(q), theme:'light'})}`, 'Light', theme==='light');
+
+const caps = {
+  hidden: 'Pill visibility set to "Only in the last minute": nothing is on screen while you work (19:31 left). The pill slides in at 1:00 left, grows into the break card at 0:00, and hides again after the break.',
+  compact: 'Pill while working. Hangs from the top center. Accent color changes with time of day (cyan by day). Thin progress line along the bottom. Never takes focus.',
+  urgent: 'Last minute: orange outline pulses, text changes to "Break in 45s".',
+  away: 'Smart pause: moon icon and dimmed time while you are away from the PC.',
+  break: 'Break card (borderless game running): breathing ring and eye, rotating prompt. With the camera on, blinks are counted automatically.',
+  done: 'End of break: "Nice, eyes rested", goal and streak. Collapses after 3 seconds.',
+  game: 'Game card: smaller, no mouse buttons, hotkey hints. Shown when a fullscreen app is detected and no anti-cheat is running.',
+  safe: 'Anti-cheat safe mode: no overlay, no hotkeys, camera off. Sound plays and a small toast appears if Windows allows it.',
+};
+document.getElementById('caption').textContent =
+  scene === 'pill' ? caps[state] : scene === 'tray' ? 'Tray flyout: left-click the eye in the tray. Fluent acrylic style, closes when you click elsewhere.' :
+  'Settings window: PowerToys / WinUI 3 style with a Mica-like background, left navigation, and Settings cards. Follows the system light or dark theme and accent color.';
+</script>
+</body>
+</html>

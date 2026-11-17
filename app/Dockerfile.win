@@ -1,0 +1,17 @@
+# Cross-compile the Windows x64 exe from a Linux container.
+# llvm-rc compiles the Windows resource (.rc) section; cargo-xwin supplies the
+# Windows SDK/CRT and links with lld. No Windows or host LLVM install needed.
+FROM rust:1-bookworm
+
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends llvm lld clang \
+    && rm -rf /var/lib/apt/lists/*
+
+# tauri-winres looks for a plain `llvm-rc` on PATH.
+RUN bash -c 'ln -sf "$(ls /usr/bin/llvm-rc-* | head -1)" /usr/local/bin/llvm-rc'
+
+RUN cargo install cargo-xwin --locked
+RUN rustup target add x86_64-pc-windows-msvc
+
+WORKDIR /work/src-tauri
+CMD ["cargo", "xwin", "build", "--release", "--locked", "--target", "x86_64-pc-windows-msvc", "--features", "custom-protocol"]
