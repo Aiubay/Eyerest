@@ -14,3 +14,9 @@ app/dist/
 # Rust / Tauri build output
 app/src-tauri/target/
 app/.win-target/
+
+# Design notes and mockups (kept locally)
+mockups/
+PLAN.md
+RND.md
+WINDOWS_PLAN.md
