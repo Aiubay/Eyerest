@@ -421,6 +421,14 @@ body {
   --win-border: rgba(0, 0, 0, 0.1);
 }
 
+body.clean-preview .stage:not(.settings-stage):not(.tray-stage) {
+  height: 280px;
+}
+
+body.clean-preview .settings-stage {
+  height: 640px;
+}
+
 .settings-stage {
   height: min(700px, 76vh);
   padding: 18px;

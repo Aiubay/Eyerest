@@ -39,6 +39,7 @@ function initialTheme(): "dark" | "light" {
 
 export default function App() {
   const windowKind = query("window");
+  const clean = query("clean") === "1";
   const { timer, settings, update } = useAppState();
   const demoTimer = useDemoTimer(initialPreviewState());
   const [scene, setScene] = useState<Scene>(initialScene);
@@ -47,8 +48,12 @@ export default function App() {
 
   useEffect(() => {
     document.body.classList.toggle("native", windowKind !== null);
-    return () => document.body.classList.remove("native");
-  }, [windowKind]);
+    document.body.classList.toggle("clean-preview", clean);
+    return () => {
+      document.body.classList.remove("native");
+      document.body.classList.remove("clean-preview");
+    };
+  }, [windowKind, clean]);
 
   // The dev preview is browser-only; a packaged window always carries ?window=.
   if (windowKind === null && isTauri) {
@@ -94,10 +99,12 @@ export default function App() {
       theme={theme === "dark" ? webDarkTheme : webLightTheme}
       className="fluent-root"
     >
-      <header className="devhead">
-        <b>EyeRule Windows preview</b>
-        <span>phase 5 · engine wired</span>
-      </header>
+      {!clean && (
+        <header className="devhead">
+          <b>EyeRule Windows preview</b>
+          <span>phase 5 · engine wired</span>
+        </header>
+      )}
 
       {scene === "pill" && (
         <div className="stage" data-backdrop={backdrop}>
@@ -143,6 +150,7 @@ export default function App() {
         </div>
       )}
 
+      {!clean && (
       <div className="devbar">
         <span className="devlabel">Scene</span>
         <button className={scene === "pill" ? "on" : ""} onClick={() => setScene("pill")}>
@@ -188,6 +196,7 @@ export default function App() {
           Light
         </button>
       </div>
+      )}
     </FluentProvider>
   );
 }
