@@ -1,13 +1,14 @@
 import { FluentProvider, webDarkTheme, webLightTheme } from "@fluentui/react-components";
 import { useEffect, useState } from "react";
 import { CameraRunner } from "./camera/CameraRunner";
+import { DesktopScene } from "./components/DesktopScene";
 import { Pill } from "./components/Pill";
 import { TrayFlyout } from "./components/TrayFlyout";
 import { type DemoStart, useDemoTimer } from "./demo/useDemoTimer";
 import { SettingsWindow } from "./settings/SettingsWindow";
 import { isTauri, useAppState } from "./state/useAppState";
 
-type Scene = "pill" | "settings" | "tray";
+type Scene = "pill" | "settings" | "tray" | "desktop";
 
 function query(key: string): string | null {
   return new URLSearchParams(window.location.search).get(key);
@@ -30,7 +31,9 @@ function initialPreviewState(): DemoStart {
 
 function initialScene(): Scene {
   const scene = query("scene");
-  return scene === "settings" || scene === "tray" ? scene : "pill";
+  return scene === "settings" || scene === "tray" || scene === "desktop"
+    ? scene
+    : "pill";
 }
 
 function initialTheme(): "dark" | "light" {
@@ -40,6 +43,7 @@ function initialTheme(): "dark" | "light" {
 export default function App() {
   const windowKind = query("window");
   const clean = query("clean") === "1";
+  const platform = query("platform") === "mac" ? "mac" : "windows";
   const { timer, settings, update } = useAppState();
   const demoTimer = useDemoTimer(initialPreviewState());
   const [scene, setScene] = useState<Scene>(initialScene);
@@ -106,6 +110,10 @@ export default function App() {
         </header>
       )}
 
+      {scene === "desktop" && (
+        <DesktopScene platform={platform} timer={previewTimer} />
+      )}
+
       {scene === "pill" && (
         <div className="stage" data-backdrop={backdrop}>
           {backdrop === "game" && (
@@ -161,6 +169,12 @@ export default function App() {
         </button>
         <button className={scene === "tray" ? "on" : ""} onClick={() => setScene("tray")}>
           Tray
+        </button>
+        <button
+          className={scene === "desktop" ? "on" : ""}
+          onClick={() => setScene("desktop")}
+        >
+          Desktop
         </button>
 
         {scene === "pill" && (

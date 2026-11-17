@@ -9,6 +9,14 @@ Two apps share the same behavior and visual language:
 | macOS | Swift + SwiftUI (native notch panel) | Working |
 | Windows 11 x64 | Rust + Tauri v2 + React/Fluent UI | Builds; needs on-PC validation |
 
+## On the desktop
+
+| Windows 11 | macOS |
+|---|---|
+| <img src="docs/preview/windows-desktop.png" width="520" alt="Pill on a Windows 11 desktop with taskbar" /> | <img src="docs/preview/mac-desktop.png" width="470" alt="Pill hanging from the macOS menu bar" /> |
+
+These are desktop-context renders of the UI, not live screenshots. A real Windows capture will be added after the first on-PC run.
+
 ## Previews
 
 | Pill | Break card |
