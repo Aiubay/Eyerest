@@ -85,9 +85,9 @@ final class EyeTimer: ObservableObject {
     @Published var prompt = EyeTimer.prompts[0]
     @Published var history: [String: Int]
     @Published var launchNote: String?
-    @Published var controlsHeight: CGFloat = ControlsTab.timer.height {
-        didSet { card.resizeControls(timer: self, from: oldValue) }
-    }
+    /// Measured panel height per controls tab.
+    var tabHeights: [ControlsTab: CGFloat] = [:]
+    @Published var controlsHeight: CGFloat = ControlsTab.timer.height
 
     // MARK: Persisted settings
 
@@ -170,6 +170,13 @@ final class EyeTimer: ObservableObject {
     @Published var blinkRateThreshold: Int {
         didSet { defaults.set(blinkRateThreshold, forKey: "blinkRateThreshold") }
     }
+    /// Hides the resting island while a fullscreen app is in front. Breaks still appear.
+    @Published var hideInFullscreen: Bool {
+        didSet {
+            defaults.set(hideInFullscreen, forKey: "hideInFullscreen")
+            refreshFullscreen()
+        }
+    }
     @Published var launchAtLogin: Bool {
         didSet {
             guard !suppressLaunch, oldValue != launchAtLogin else { return }
@@ -221,6 +228,7 @@ final class EyeTimer: ObservableObject {
         breakSeconds = d.object(forKey: "breakSeconds") as? Int ?? 20
         dailyGoal = d.object(forKey: "dailyGoal") as? Int ?? 15
         smartPause = d.object(forKey: "smartPause") as? Bool ?? true
+        hideInFullscreen = d.object(forKey: "hideInFullscreen") as? Bool ?? true
         meetingMode = d.object(forKey: "meetingMode") as? Bool ?? true
         cameraEnabled = d.object(forKey: "cameraEnabled") as? Bool ?? false
         cameraPresencePause = d.object(forKey: "cameraPresencePause") as? Bool ?? true
@@ -269,8 +277,15 @@ final class EyeTimer: ObservableObject {
         ) { [weak self] _ in
             MainActor.assumeIsolated { self?.sleeping = false }
         })
+        // Entering or leaving fullscreen switches Space; switching apps can bring one forward.
+        for name in [NSWorkspace.activeSpaceDidChangeNotification, NSWorkspace.didActivateApplicationNotification] {
+            workspaceObservers.append(workspace.addObserver(forName: name, object: nil, queue: .main) { [weak self] _ in
+                MainActor.assumeIsolated { self?.scheduleFullscreenCheck() }
+            })
+        }
         persistInsights()
         card.sync(timer: self)
+        refreshFullscreen()
 
         camera.onBlink = { [weak self] in self?.countBlink() }
         camera.onActive = { [weak self] active in self?.cameraActive = active }
@@ -286,8 +301,8 @@ final class EyeTimer: ObservableObject {
     }
 
     var compactLabel: String {
-        if deferred { return "In a call" }
-        if isUrgent { return "Break in \(remaining)s" }
+        // The resting wings are narrow; a call shows as an icon on the other side.
+        if isUrgent && !deferred { return "\(remaining)s" }
         return label
     }
 
@@ -420,9 +435,44 @@ final class EyeTimer: ObservableObject {
     }
 
     func openControls() {
-        controlsHeight = ControlsTab.timer.height
+        controlsHeight = height(for: .timer)
         card.openControls(timer: self)
     }
+
+    /// Tallest panel any tab needs, so the window can be reserved once.
+    var tallestControls: CGFloat {
+        ControlsTab.allCases.map { height(for: $0) }.max() ?? ControlsTab.settings.height
+    }
+
+    /// Called when a tab's measured height exceeds what the window has reserved.
+    func reserveControls() { card.reserveControls(timer: self) }
+
+    /// Panel height for a tab: measured once rendered, otherwise a first guess.
+    func height(for tab: ControlsTab) -> CGFloat { tabHeights[tab] ?? tab.height }
+
+    private var fullscreenCheck: Task<Void, Never>?
+
+    /// Checks now and again once the Space animation has settled, when window frames are final.
+    private func scheduleFullscreenCheck() {
+        refreshFullscreen()
+        fullscreenCheck?.cancel()
+        fullscreenCheck = Task { [weak self] in
+            try? await Task.sleep(nanoseconds: 700_000_000)
+            guard !Task.isCancelled else { return }
+            self?.refreshFullscreen()
+        }
+    }
+
+    func refreshFullscreen() {
+        var fullscreen = false
+        if hideInFullscreen, let app = NSWorkspace.shared.frontmostApplication,
+           app.processIdentifier != ProcessInfo.processInfo.processIdentifier {
+            fullscreen = DimScreenPolicy.fullscreenStatus(for: app) == true
+        }
+        card.setHiddenForFullscreen(fullscreen, timer: self)
+    }
+
+    func closeControls() { card.hide(timer: self) }
 
     func reset() {
         endTrackedBreak(.skipped)
@@ -720,20 +770,37 @@ final class BreakCardController {
     private var hideTask: Task<Void, Never>?
     private var monitor: Any?
     private var hasNotch = false
+    private var floating: Bool { !hasNotch }
+    /// A fullscreen app is in front: the resting island steps away, a break still shows.
+    private var hiddenForFullscreen = false
     private var topInset: CGFloat = 24
+    private var restingHeight: CGFloat = 24
     private var notchWidth: CGFloat = 140
     private var screenFrame: NSRect = .zero
 
     static let wing: CGFloat = 92
+    /// Side room of the compact pill, either side of the notch.
+    static let compactWing: CGFloat = 44
     /// Extra transparent room so the spring animation can overshoot without clipping.
     static let overshoot: CGFloat = 24
     static let width: CGFloat = 340
     static let contentHeight: CGFloat = 165
+    /// Floating island (Macs without a notch).
+    /// Outward curve at the top corners of a notch island.
+    static let flare: CGFloat = 9
+    /// How much the compact island grows under the pointer.
+    static let hoverGrowWidth: CGFloat = 16
+    static let hoverGrowHeight: CGFloat = 4
+    static let floatingGap: CGFloat = 8
+    static let floatingHeight: CGFloat = 34
+    static let floatingCompactWidth: CGFloat = 200
+    static let floatingHeadroom: CGFloat = 6
 
     func sync(timer: EyeTimer) {
         if timer.mode.usesCard {
             ensurePanel(timer: timer)
-            if hasNotch || timer.cardExpanded { panel?.orderFrontRegardless() } else { panel?.orderOut(nil) }
+            if hiddenForFullscreen && !timer.cardExpanded { panel?.orderOut(nil) }
+            else { panel?.orderFrontRegardless() }
         } else {
             hideTask?.cancel()
             timer.cardExpanded = false
@@ -744,12 +811,17 @@ final class BreakCardController {
         }
     }
 
-    /// One width for both the compact pill and the expanded card.
+    /// Width of the expanded card. The compact pill is narrower.
     private var pillWidth: CGFloat { max(notchWidth + Self.wing * 2, Self.width) }
+    private var compactWidth: CGFloat { notchWidth + Self.compactWing * 2 + Self.flare * 2 }
 
     private func frame(expanded: Bool, controlsHeight: CGFloat? = nil) -> NSRect {
-        let w = expanded ? pillWidth + Self.overshoot * 2 : pillWidth
-        let h = expanded ? topInset + (controlsHeight ?? Self.contentHeight) + Self.overshoot : topInset
+        let gap = floating ? Self.floatingGap : 0
+        let headroom = floating ? Self.floatingHeadroom : topInset
+        let compactW = floating ? Self.floatingCompactWidth : compactWidth
+        let w = expanded ? pillWidth + Self.overshoot * 2 : compactW + Self.hoverGrowWidth
+        let h = gap + (expanded ? headroom + (controlsHeight ?? Self.contentHeight) + Self.overshoot
+                       : restingHeight + Self.hoverGrowHeight)
         return NSRect(x: screenFrame.midX - w / 2, y: screenFrame.maxY - h, width: w, height: h)
     }
 
@@ -764,10 +836,15 @@ final class BreakCardController {
             notchWidth = screen.frame.width - l.width - r.width
         }
         if notchWidth <= 0 { notchWidth = 140 }
+        if floating { topInset = Self.floatingHeight }
+        // Rest at the camera's height, like Vorssaint; open below the whole menu bar.
+        restingHeight = floating ? topInset : max(screen.safeAreaInsets.top, 24)
 
-        let host = NSHostingView(rootView: BreakCardView(timer: timer, topInset: topInset,
+        let host = NSHostingView(rootView: BreakCardView(timer: timer, topInset: topInset, restingHeight: restingHeight,
                                                          notchWidth: notchWidth,
-                                                         pillWidth: pillWidth))
+                                                         pillWidth: pillWidth,
+                                                         compactWidth: compactWidth,
+                                                         floating: floating))
         let p = NSPanel(contentRect: frame(expanded: false),
                         styleMask: [.borderless, .nonactivatingPanel],
                         backing: .buffered, defer: false)
@@ -784,7 +861,9 @@ final class BreakCardController {
     private func expand(timer: EyeTimer) {
         hideTask?.cancel()
         ensurePanel(timer: timer)
-        panel?.setFrame(frame(expanded: true, controlsHeight: timer.showControls ? timer.controlsHeight : nil), display: true)
+        // Reserve room for the tallest tab up front. Tab changes then only animate the
+        // shape inside the window; resizing the window mid-animation made it jump.
+        panel?.setFrame(frame(expanded: true, controlsHeight: timer.showControls ? timer.tallestControls : nil), display: true)
         panel?.orderFrontRegardless()
         timer.cardExpanded = true
     }
@@ -806,19 +885,23 @@ final class BreakCardController {
         }
     }
 
-    /// Grows the window right away, but shrinks it only after the shape has animated down.
-    func resizeControls(timer: EyeTimer, from old: CGFloat) {
-        guard timer.showControls, timer.cardExpanded, let panel else { return }
-        let target = timer.controlsHeight
-        if target >= old {
-            panel.setFrame(frame(expanded: true, controlsHeight: target), display: true)
+    func setHiddenForFullscreen(_ hidden: Bool, timer: EyeTimer) {
+        guard hidden != hiddenForFullscreen else { return }
+        hiddenForFullscreen = hidden
+        guard timer.mode.usesCard else { return }
+        // An open break card or open controls stay; the island hides when they close.
+        if hidden {
+            if !timer.cardExpanded { panel?.orderOut(nil) }
         } else {
-            Task { [weak self] in
-                try? await Task.sleep(nanoseconds: 500_000_000)
-                guard let self, timer.showControls, timer.controlsHeight == target else { return }
-                self.panel?.setFrame(self.frame(expanded: true, controlsHeight: target), display: true)
-            }
+            ensurePanel(timer: timer)
+            panel?.orderFrontRegardless()
         }
+    }
+
+    func reserveControls(timer: EyeTimer) {
+        guard timer.showControls, timer.cardExpanded, let panel else { return }
+        let needed = frame(expanded: true, controlsHeight: timer.tallestControls)
+        if needed.height > panel.frame.height { panel.setFrame(needed, display: true) }
     }
 
     private func removeMonitor() {
@@ -839,7 +922,7 @@ final class BreakCardController {
             try? await Task.sleep(nanoseconds: 500_000_000)
             guard !Task.isCancelled else { return }
             self.panel?.setFrame(self.frame(expanded: false), display: true)
-            if !self.hasNotch { self.panel?.orderOut(nil) }
+            if self.hiddenForFullscreen { self.panel?.orderOut(nil) }
         }
     }
 }

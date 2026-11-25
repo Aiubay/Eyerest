@@ -11,6 +11,25 @@ struct DimScreenPolicy {
     static func coversScreen(_ window: CGRect, screen: CGRect) -> Bool {
         window.contains(screen.insetBy(dx: 2, dy: 2))
     }
+
+    /// Whether `app` has a normal window covering the whole main display, menu bar included,
+    /// which is what a fullscreen app or video looks like. Nil when it has no window on screen.
+    static func fullscreenStatus(for app: NSRunningApplication) -> Bool? {
+        guard let windows = CGWindowListCopyWindowInfo(
+            [.optionOnScreenOnly, .excludeDesktopElements], kCGNullWindowID
+        ) as? [[String: Any]] else { return nil }
+        let screen = CGDisplayBounds(CGMainDisplayID())
+        var foundWindow = false
+        for window in windows {
+            guard window[kCGWindowOwnerPID as String] as? pid_t == app.processIdentifier,
+                  window[kCGWindowLayer as String] as? Int == 0,
+                  let bounds = window[kCGWindowBounds as String] as? [String: Any],
+                  let frame = CGRect(dictionaryRepresentation: bounds as CFDictionary) else { continue }
+            foundWindow = true
+            if coversScreen(frame, screen: screen) { return true }
+        }
+        return foundWindow ? false : nil
+    }
 }
 
 @MainActor
@@ -68,20 +87,7 @@ final class DimScreenController: NSObject, NSWindowDelegate {
     }
 
     private func fullscreenStatus(for app: NSRunningApplication) -> Bool? {
-        guard let windows = CGWindowListCopyWindowInfo(
-            [.optionOnScreenOnly, .excludeDesktopElements], kCGNullWindowID
-        ) as? [[String: Any]] else { return nil }
-        let screen = CGDisplayBounds(CGMainDisplayID())
-        var foundWindow = false
-        for window in windows {
-            guard window[kCGWindowOwnerPID as String] as? pid_t == app.processIdentifier,
-                  window[kCGWindowLayer as String] as? Int == 0,
-                  let bounds = window[kCGWindowBounds as String] as? [String: Any],
-                  let frame = CGRect(dictionaryRepresentation: bounds as CFDictionary) else { continue }
-            foundWindow = true
-            if DimScreenPolicy.coversScreen(frame, screen: screen) { return true }
-        }
-        return foundWindow ? false : nil
+        DimScreenPolicy.fullscreenStatus(for: app)
     }
 
     func show(timer: EyeTimer, busy: Bool, locked: Bool, sleeping: Bool) {

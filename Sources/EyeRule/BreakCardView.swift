@@ -4,21 +4,43 @@ import SwiftUI
 /// Rounded only at the bottom, so the top blends into the screen edge and notch.
 struct NotchShape: Shape {
     var radius: CGFloat
-    var animatableData: CGFloat {
-        get { radius }
-        set { radius = newValue }
+    /// Floating islands (Macs without a notch) round the top corners too.
+    var roundTop = false
+    /// Notch islands flare outward at the top, so the black blends into the screen edge.
+    var flare: CGFloat = 0
+    var animatableData: AnimatablePair<CGFloat, CGFloat> {
+        get { AnimatablePair(radius, flare) }
+        set { radius = newValue.first; flare = newValue.second }
     }
     func path(in rect: CGRect) -> Path {
-        let r = min(radius, rect.height / 2, rect.width / 2)
+        let r = min(radius, rect.height / 2, (rect.width - 2 * flare) / 2)
         var p = Path()
+        if roundTop {
+            p.addRoundedRect(in: rect, cornerSize: CGSize(width: r, height: r), style: .continuous)
+            return p
+        }
+        let f = flare
+        // Control-point ratio for a cubic that traces a quarter circle.
+        let k: CGFloat = 0.55228475
         p.move(to: CGPoint(x: rect.minX, y: rect.minY))
         p.addLine(to: CGPoint(x: rect.maxX, y: rect.minY))
-        p.addLine(to: CGPoint(x: rect.maxX, y: rect.maxY - r))
-        p.addArc(center: CGPoint(x: rect.maxX - r, y: rect.maxY - r), radius: r,
+        if f > 0 {
+            p.addCurve(to: CGPoint(x: rect.maxX - f, y: rect.minY + f),
+                       control1: CGPoint(x: rect.maxX - f * k, y: rect.minY),
+                       control2: CGPoint(x: rect.maxX - f, y: rect.minY + f * (1 - k)))
+        }
+        p.addLine(to: CGPoint(x: rect.maxX - f, y: rect.maxY - r))
+        p.addArc(center: CGPoint(x: rect.maxX - f - r, y: rect.maxY - r), radius: r,
                  startAngle: .degrees(0), endAngle: .degrees(90), clockwise: false)
-        p.addLine(to: CGPoint(x: rect.minX + r, y: rect.maxY))
-        p.addArc(center: CGPoint(x: rect.minX + r, y: rect.maxY - r), radius: r,
+        p.addLine(to: CGPoint(x: rect.minX + f + r, y: rect.maxY))
+        p.addArc(center: CGPoint(x: rect.minX + f + r, y: rect.maxY - r), radius: r,
                  startAngle: .degrees(90), endAngle: .degrees(180), clockwise: false)
+        if f > 0 {
+            p.addLine(to: CGPoint(x: rect.minX + f, y: rect.minY + f))
+            p.addCurve(to: CGPoint(x: rect.minX, y: rect.minY),
+                       control1: CGPoint(x: rect.minX + f, y: rect.minY + f * (1 - k)),
+                       control2: CGPoint(x: rect.minX + f * k, y: rect.minY))
+        }
         p.closeSubpath()
         return p
     }
@@ -38,15 +60,32 @@ struct PillButtonStyle: ButtonStyle {
     }
 }
 
+/// Content heights reported by the (hidden) measuring copies of each tab.
+struct TabHeightKey: PreferenceKey {
+    static var defaultValue: [ControlsTab: CGFloat] = [:]
+    static func reduce(value: inout [ControlsTab: CGFloat], nextValue: () -> [ControlsTab: CGFloat]) {
+        value.merge(nextValue()) { $1 }
+    }
+}
+
+/// Blur plus fade between tabs, similar to `.blurReplace` (macOS 14+).
+struct BlurFade: ViewModifier {
+    let amount: Double
+    var blurs = true
+    func body(content: Content) -> some View {
+        content.blur(radius: blurs ? 6 * amount : 0).opacity(1 - amount)
+    }
+}
+
 enum ControlsTab: String, CaseIterable {
     case timer = "Timer", stats = "Stats", settings = "Settings"
 
-    /// Panel height below the menu bar for each tab.
+    /// First-guess panel height below the menu bar, used until the real content has been measured.
     var height: CGFloat {
         switch self {
-        case .timer: return 210
-        case .stats: return 350
-        case .settings: return 445
+        case .timer: return 195
+        case .stats: return 300
+        case .settings: return 400
         }
     }
 }
@@ -54,47 +93,93 @@ enum ControlsTab: String, CaseIterable {
 struct BreakCardView: View {
     @ObservedObject var timer: EyeTimer
     let topInset: CGFloat
+    /// Height of the resting strip: the camera housing's own height beside a notch.
+    let restingHeight: CGFloat
     let notchWidth: CGFloat
     let pillWidth: CGFloat
+    let compactWidth: CGFloat
+    /// True on Macs without a notch: a detached island that hovers below the top edge.
+    var floating = false
 
+    @State private var hoverTask: Task<Void, Never>?
+    @State private var hoverOpened = false
+    @State private var hovering = false
+    @State private var pressed = false
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var pulse = false
     @State private var breathe = false
     @State private var eyeClosed = false
-    @State private var shimmer: CGFloat = -0.2
     @State private var tab: ControlsTab = .timer
 
-    private var wing: CGFloat { (pillWidth - notchWidth) / 2 }
+    /// Shoulder at the top corners. The resting strip keeps small ones, as the notch itself has.
+    private var flare: CGFloat {
+        if floating { return 0 }
+        return expanded ? BreakCardController.flare : min(BreakCardController.flare, compactHeight * 0.19)
+    }
+    /// One spring for expand, collapse, hover and press, so the island moves as a single object.
+    private static let islandSpring = Animation.spring(response: 0.48, dampingFraction: 0.76, blendDuration: 0.3)
+
+    private var wing: CGFloat { (compactWidth - 2 * flare - notchWidth) / 2 }
     private var expanded: Bool { timer.cardExpanded }
+    /// Space above expanded content. A notch or menu bar must be cleared; a floating island needs little.
+    private var headroom: CGFloat { floating ? BreakCardController.floatingHeadroom : topInset }
+    private var islandWidth: CGFloat {
+        if expanded { return pillWidth }
+        let base = floating ? BreakCardController.floatingCompactWidth : compactWidth
+        return base + (hovering ? BreakCardController.hoverGrowWidth : 0)
+    }
+    private var islandHeight: CGFloat {
+        expanded ? expandedHeight : compactHeight + (hovering ? BreakCardController.hoverGrowHeight : 0)
+    }
+    private var compactHeight: CGFloat {
+        floating ? topInset : restingHeight
+    }
+    private var shape: NotchShape {
+        NotchShape(radius: expanded ? 28 : (floating ? topInset / 2 : compactHeight * 0.34), roundTop: floating, flare: flare)
+    }
     private var expandedHeight: CGFloat {
-        topInset + (timer.showControls ? timer.controlsHeight : BreakCardController.contentHeight)
+        headroom + (timer.showControls ? timer.controlsHeight : BreakCardController.contentHeight)
     }
 
     var body: some View {
         ZStack(alignment: .top) {
-            NotchShape(radius: expanded ? 30 : topInset / 2).fill(Color.black)
-            NotchShape(radius: expanded ? 30 : topInset / 2)
-                .stroke(timer.accent.opacity(edgeOpacity), lineWidth: 1.5)
+            shape.fill(Color.black)
             if expanded {
                 Group {
                     if timer.showControls { controlsContent } else { breakContent }
                 }
+                .padding(.horizontal, flare)
                 .transition(.opacity)
             } else {
-                compactContent.transition(.opacity)
+                compactContent
+                    .padding(.horizontal, flare)
+                    .transition(.opacity)
             }
         }
-        .frame(width: pillWidth, height: expanded ? expandedHeight : topInset)
-        .clipShape(NotchShape(radius: expanded ? 30 : topInset / 2))
+        .frame(width: islandWidth, height: islandHeight, alignment: .top)
+        .clipShape(shape)
+        .scaleEffect(pressed ? 0.96 : 1, anchor: .top)
+        .onHover(perform: handleHover)
+        .simultaneousGesture(
+            DragGesture(minimumDistance: 24).onEnded { value in
+                // Swipe up to dismiss the controls.
+                if timer.showControls && value.translation.height < -40 { timer.closeControls() }
+            }
+        )
+        .padding(.top, floating ? BreakCardController.floatingGap : 0)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-        .animation(.spring(response: 0.5, dampingFraction: 0.55), value: expanded)
+        .animation(Self.islandSpring, value: expanded)
+        .animation(Self.islandSpring, value: pressed)
+        .animation(Self.islandSpring, value: hovering)
         .animation(.spring(response: 0.45, dampingFraction: 0.78), value: timer.showControls)
-        .animation(.spring(response: 0.4, dampingFraction: 0.8), value: timer.controlsHeight)
-        .onAppear {
+                .onAppear {
             withAnimation(.easeInOut(duration: 0.9).repeatForever(autoreverses: true)) { pulse = true }
             withAnimation(.easeInOut(duration: 2.4).repeatForever(autoreverses: true)) { breathe = true }
-            withAnimation(.linear(duration: 2.6).repeatForever(autoreverses: false)) { shimmer = 1.1 }
         }
-        .onChange(of: timer.showControls) { _ in tab = .timer }
+        .onChange(of: timer.showControls) { open in
+            tab = .timer
+            if !open { hoverOpened = false }
+        }
         .task {
             // Blink the idle eye every few seconds.
             while !Task.isCancelled {
@@ -106,20 +191,100 @@ struct BreakCardView: View {
         }
     }
 
-    private var edgeOpacity: Double {
-        if timer.phase == .resting || timer.isUrgent { return pulse ? 0.95 : 0.25 }
-        return 0.4
+    /// Hovering grows the compact island a little. On a floating island it also opens the controls, leaving closes them again.
+    /// Controls opened by a click or a break card are left alone.
+    private func handleHover(_ inside: Bool) {
+        hovering = inside
+        guard floating else { return }
+        hoverTask?.cancel()
+        if inside {
+            guard !expanded else { return }
+            hoverTask = Task {
+                try? await Task.sleep(nanoseconds: 250_000_000)
+                guard !Task.isCancelled, !timer.cardExpanded else { return }
+                hoverOpened = true
+                timer.openControls()
+            }
+        } else if hoverOpened {
+            hoverTask = Task {
+                try? await Task.sleep(nanoseconds: 450_000_000)
+                guard !Task.isCancelled, timer.showControls else { return }
+                hoverOpened = false
+                timer.closeControls()
+            }
+        }
     }
 
     // MARK: Compact pill
 
     private var compactIcon: String {
         if timer.autoPaused { return "moon.zzz.fill" }
+        if timer.deferred { return "phone.fill" }
         if !timer.isRunning { return "pause.fill" }
         return "eye.fill"
     }
 
     private var compactContent: some View {
+        compactLayout
+            .frame(height: compactHeight)
+            .contentShape(Rectangle())
+            .gesture(
+                DragGesture(minimumDistance: 0)
+                    .onChanged { _ in pressed = true }
+                    .onEnded { value in
+                        pressed = false
+                        if abs(value.translation.width) < 6 && abs(value.translation.height) < 6 {
+                            timer.openControls()
+                        }
+                    }
+            )
+            .contextMenu {
+                Button(timer.isRunning ? "Pause" : "Resume") { timer.toggle() }
+                Button("Break now") { timer.startBreakNow() }
+                Button("Reset timer") { timer.reset() }
+                Divider()
+                Button("Quit EyeRule") { NSApplication.shared.terminate(nil) }
+            }
+    }
+
+    private var compactIconView: some View {
+        Image(systemName: compactIcon)
+            .font(.system(size: 13, weight: .semibold))
+            .foregroundStyle(timer.accent)
+            .opacity(timer.isUrgent && pulse ? 0.35 : 1)
+            .scaleEffect(x: 1, y: (eyeClosed && timer.isActive) ? 0.1 : 1)
+    }
+
+    private var compactTextView: some View {
+        HStack(spacing: 5) {
+            if timer.cameraActive {
+                Image(systemName: "camera.fill")
+                    .font(.system(size: 8, weight: .semibold))
+                    .foregroundStyle(.white.opacity(0.5))
+            }
+            Text(timer.compactLabel)
+                .font(.system(size: 13, weight: .semibold, design: .rounded))
+                .lineLimit(1)
+                .minimumScaleFactor(0.8)
+                .monospacedDigit()
+                .foregroundStyle(timer.isActive ? .white : .white.opacity(0.5))
+        }
+    }
+
+    @ViewBuilder private var compactLayout: some View {
+        if floating {
+            HStack(spacing: 0) {
+                compactIconView
+                Spacer(minLength: 8)
+                compactTextView
+            }
+            .padding(.horizontal, 16)
+        } else {
+            notchedCompactLayout
+        }
+    }
+
+    private var notchedCompactLayout: some View {
         HStack(spacing: 0) {
             Image(systemName: compactIcon)
                 .font(.system(size: 13, weight: .semibold))
@@ -143,31 +308,6 @@ struct BreakCardView: View {
             }
             .frame(width: wing)
         }
-        .frame(height: topInset)
-        .overlay(alignment: .bottom) { progressLine }
-        .contentShape(Rectangle())
-        .onTapGesture { timer.openControls() }
-    }
-
-    private var progressLine: some View {
-        GeometryReader { geo in
-            let fill = geo.size.width * min(max(timer.progress, 0), 1)
-            ZStack(alignment: .leading) {
-                Capsule().fill(Color.white.opacity(0.12))
-                Capsule().fill(timer.accent)
-                    .frame(width: fill)
-                    .overlay(alignment: .leading) {
-                        LinearGradient(colors: [.clear, .white.opacity(0.7), .clear],
-                                       startPoint: .leading, endPoint: .trailing)
-                            .frame(width: 36)
-                            .offset(x: fill * shimmer - 18)
-                    }
-                    .clipShape(Capsule())
-            }
-        }
-        .frame(height: 3)
-        .padding(.horizontal, topInset / 2)
-        .padding(.bottom, 4)
     }
 
     // MARK: Break
@@ -214,7 +354,7 @@ struct BreakCardView: View {
             }
         }
         .padding(.horizontal, 28)
-        .padding(.top, topInset + 8)
+        .padding(.top, headroom + 8)
     }
 
     private var doneSubtitle: String {
@@ -228,24 +368,71 @@ struct BreakCardView: View {
     private var controlsContent: some View {
         VStack(spacing: 12) {
             tabBar
-            Group {
-                switch tab {
-                case .timer: timerTab
-                case .stats: statsTab
-                case .settings: settingsTab
-                }
-            }
-            Spacer(minLength: 0)
+            tabPages
         }
+        // The stacked tabs are as tall as Settings. Pin to the top so a shorter
+        // island clips the bottom, never the tab bar.
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         .padding(.horizontal, 24)
-        .padding(.top, topInset + 8)
+        .padding(.top, headroom + 8)
         .environment(\.colorScheme, .dark)
+    }
+
+    /// Every tab stays mounted, stacked in place; only the selected one is visible.
+    /// Inserting Settings during the animation made its AppKit-backed switches,
+    /// steppers and pickers animate their frames in from the middle.
+    private var tabPages: some View {
+        ZStack(alignment: .top) {
+            ForEach(ControlsTab.allCases, id: \.self) { t in
+                page(t)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .background(GeometryReader { geo in
+                        Color.clear.preference(key: TabHeightKey.self, value: [t: geo.size.height])
+                    })
+                    .modifier(BlurFade(amount: tab == t ? 0 : 1, blurs: !reduceMotion))
+                    .allowsHitTesting(tab == t)
+                    .accessibilityHidden(tab != t)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .top)
+        .onPreferenceChange(TabHeightKey.self) { heights in
+            // Tab bar, spacing and padding around the content.
+            let extra: CGFloat = 8 + 28 + 12 + 20
+            var fitted: [ControlsTab: CGFloat] = [:]
+            for (t, h) in heights where h > 0 { fitted[t] = (h + extra).rounded(.up) }
+            guard !fitted.isEmpty else { return }
+            timer.tabHeights.merge(fitted) { $1 }
+            timer.reserveControls()
+            if let h = fitted[tab], timer.showControls, abs(h - timer.controlsHeight) > 0.5 {
+                withAnimation(tabMotion) { timer.controlsHeight = h }
+            }
+        }
+    }
+
+    /// Tab changes: a short spring with no bounce, as Vorssaint uses for its paging.
+    private var tabMotion: Animation? {
+        reduceMotion ? nil : .spring(response: 0.3, dampingFraction: 1.0)
+    }
+
+    @ViewBuilder private func page(_ t: ControlsTab) -> some View {
+        switch t {
+        case .timer: timerTab
+        case .stats: statsTab
+        case .settings: settingsTab
+        }
     }
 
     private var tabBar: some View {
         HStack(spacing: 6) {
             ForEach(ControlsTab.allCases, id: \.self) { t in
-                Button(t.rawValue) { tab = t; timer.controlsHeight = t.height }
+                Button(t.rawValue) {
+                    guard tab != t else { return }
+                    // Content and height move in one transaction, inside a window that is already big enough.
+                    withAnimation(tabMotion) {
+                        tab = t
+                        timer.controlsHeight = timer.height(for: t)
+                    }
+                }
                     .buttonStyle(.plain)
                     .font(.system(size: 12, weight: .semibold, design: .rounded))
                     .foregroundStyle(tab == t ? .white : .white.opacity(0.5))
@@ -440,7 +627,14 @@ struct BreakCardView: View {
                            range: 5...25, step: 5, unit: "/min")
             }
             HStack(spacing: 18) {
+                toggleRow("Hide in fullscreen", $timer.hideInFullscreen)
                 toggleRow("Launch at login", $timer.launchAtLogin)
+            }
+            HStack(spacing: 18) {
+                Text("Breaks still appear over fullscreen apps.")
+                    .font(.system(size: 10, design: .rounded))
+                    .foregroundStyle(.white.opacity(0.5))
+                    .frame(maxWidth: .infinity, alignment: .leading)
                 HStack {
                     Spacer()
                     Button("Quit") { NSApplication.shared.terminate(nil) }
