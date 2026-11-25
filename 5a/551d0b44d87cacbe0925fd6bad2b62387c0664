@@ -1,0 +1,20 @@
+.gitignore
+  h_4e85a205c2cb12 2
+Sources/EyeRule/BreakCardView.swift
+  h_4e85a205c2cb12 7-13,16,18-24,27-33,35-36,38-43,63-79,83,86-88,96-97,100-102,104-108,114-122,124-139,141,146,151,154-156,159-169,171-173,175,179-182,194-215,222,228-287,357,371,373-375,377,381-424,428-435,630,632-637
+Sources/EyeRule/DimScreenController.swift
+  h_4e85a205c2cb12 14-32,90
+Sources/EyeRule/EyeTimer.swift
+  h_4e85a205c2cb12 88-90,173-179,231,280-285,288,304-305,438,442-476,773-775,777,782-783,788-797,802-803,814,816,819-824,839-841,843,845-847,864-866,888-894,896-897,901-906,925
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "5a551d0b44d87cacbe0925fd6bad2b62387c0664",
+  "prompts": {},
+  "humans": {
+    "h_4e85a205c2cb12": {
+      "author": "Ubay <achmad.ubay@erajaya.com>"
+    }
+  }
+}
